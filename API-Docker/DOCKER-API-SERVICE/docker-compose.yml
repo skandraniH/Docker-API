@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  docker-api:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      # Critical: Removed :ro for write access
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - FLASK_ENV=production
+      # Add DOCKER_HOST if using TCP (alternative approach)
+      # - DOCKER_HOST=tcp://host.docker.internal:2375
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - docker-api-network
+    # For macOS/Windows compatibility (if needed)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      docker-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - docker-api-network
+    profiles:
+      - with-nginx
+
+networks:
+  docker-api-network:
+    driver: bridge
